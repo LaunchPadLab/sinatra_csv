@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+
+<html lang="en" ng-app="csvParser" class="no-js">
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>CSV Parser</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="css/app.css"/>
+    <!-- <link rel="stylesheet" href="http://cdn.datatables.net/1.10.0/css/jquery.dataTables.css"/> -->
+
+    <script src="js/jquery-2.1.1.min.js"></script>
+    <!-- // <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script> -->
+    <!-- <script src="http://cdn.datatables.net/1.10.0/js/jquery.dataTables.js"></script> -->
+    <script src="js/angular.js"></script>
+    <script src="js/filereader.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/app.js"></script>
+
+  </head>
+
+  <body>
+
+    <!-- Nav -->
+    <nav class="navbar navbar-default" role="navigation">
+      <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">CSV Parser</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+          <ul class="nav navbar-nav navbar-right">
+            <li><a href="#" data-toggle="modal" data-target="#uploadModal">Upload</a></li>
+          </ul>
+        </div><!-- /.navbar-collapse -->
+      </div><!-- /.container-fluid -->
+    </nav>
+
+    <div ng-controller="TheController">
+
+      <!-- Load File Modal -->
+      <div class="modal fade" id="loadModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+              <h4 class="modal-title">Load File</h4>
+            </div>
+            <div class="modal-body">
+              <form role="form">
+                <div class="form-group">
+                  <select class="form-control" ng-model="activeFilename">
+                    <% @files.each do|f| %>
+                      <option value="<%= f %>"><%= f %></option>
+                    <% end %>
+                  </select>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+              <button class="btn btn-primary" value="Load" data-dismiss="modal" ng-click="loadFile()">Load</button>
+            </div>
+          </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+      </div><!-- /.modal -->
+
+      <!-- Load Config Modal -->
+      <div class="modal fade" id="loadConfigModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+              <h4 class="modal-title">Load Config</h4>
+            </div>
+            <div class="modal-body">
+              <form role="form">
+                <div class="form-group">
+                  <select class="form-control" ng-model="configFile">
+                    <% @preprocessors.each do|f| %>
+                      <option value="<%= f %>"><%= f %></option>
+                    <% end %>
+                  </select>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+              <button class="btn btn-primary" value="Load" data-dismiss="modal" ng-click="loadConfig()">Load</button>
+            </div>
+          </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+      </div><!-- /.modal -->
+
+      <!-- Library Modal -->
+      <div class="modal fade" id="libraryModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+              <h4 class="modal-title">Regex Library</h4>
+            </div>
+            <div class="modal-body">
+              <form role="form">
+                <div class="form-group">
+                  <select class="form-control" ng-model="library_regex">
+                    <option ng-repeat="regex in library" value="{{ $index }}">{{ regex.name }}</option>
+                  </select>
+                </div>
+              </form>
+              <p>
+                {{ library[library_regex].desc }}
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+              <button class="btn btn-primary" value="Load" data-dismiss="modal" ng-click="pattern.regex = library[library_regex].regex">Use</button>
+            </div>
+          </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+      </div><!-- /.modal -->
+
+      <!-- Container -->
+      <div class="container">
+
+      <!-- Top Section -->
+      <div class="row">
+
+        <!-- Configuration Details -->
+        <div class="col-md-8">
+
+          <!-- Panel -->
+          <div class="panel panel-default">
+            <div class="panel-body">
+              <ul class="list-unstyled">
+                <li>
+                  <h4>Header Rows: <small>Where column <b>{{ config.headerMatchCol }}</b> matches <b>{{ config.headerMatchValue }}</b></small></h4>
+                </li>
+                <li>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <h4>Additional Header Columns</h4>
+                      <div class="row" ng-repeat="col in config.headerAddCols track by $index">
+                        <div class="col-md-1">
+                          {{ $index + 1 }}.
+                        </div>
+                        <div class="col-md-8">
+                          {{ col }}
+                        </div>
+                        <div class="col-md-1">
+                          <a href="#" ng-click="removeHeaderPattern(pattern)"><span class="glyphicon glyphicon-trash"></span></a>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col-md-1">
+                          {{ config.headerAddCols.length +1 }}.
+                        </div>
+                        <div class="col-md-8">
+                          <form class="form-inline">
+                            <div class="form-group">
+                              <input type="text" class="form-control" ng-model="addCol">
+                              <button hidden ng-click="addHeaderCol()"></button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <h4>Additional Body Columns</h4>
+                        <div class="row" ng-repeat="col in config.bodyAddCols track by $index">
+                          <div class="col-md-1">
+                            {{ $index + 1 }}.
+                          </div>
+                          <div class="col-md-8">
+                            {{ col }}
+                          </div>
+                          <div class="col-md-1">
+                            <a href="#" ng-click="removeBodyPattern(pattern)"><span class="glyphicon glyphicon-trash"></span></a>
+                          </div>
+                        </div>
+                        <div class="row">
+                          <div class="col-md-1">
+                            {{ config.bodyAddCols.length +1 }}.
+                          </div>
+                          <div class="col-md-8">
+                            <form class="form-inline">
+                              <div class="form-group">
+                                <input type="text" class="form-control" ng-model="addCol">
+                                <button hidden ng-click="addBodyCol()"></button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                    </div>
+                  </div>
+                </li>
+                <li>
+                  <div class="row">
+                  <div class="col-md-12">
+                  <h4>Header Patterns</h4>
+                    <div ng-show="hasBodyPatterns()">
+                      <div class="row">
+                        <label class="form-label col-md-2">Name</label>
+                        <label class="form-label col-md-1 text-center">Source</label>
+                        <label class="form-label col-md-4">Regex</label>
+                        <label class="form-label col-md-2">Type</label>
+                        <label class="form-label col-md-3">Dest</label>
+                      </div>
+                      <div ng-repeat="patternset in config.headerPatterns">
+                        <div ng-repeat="pattern in patternset" class="row">
+                          <div class="col-md-2">{{ pattern.name }}</div>
+                          <div class="col-md-1 text-center">{{ pattern.sourceCol }}</div>
+                          <div class="col-md-4">{{ pattern.regex }}</div>
+                          <div class="col-md-2">{{ pattern.type }}</div>
+                          <div class="col-md-2">{{ pattern.destCol }}</div>
+                          <div class="col-md-1">
+                            <a href="#" ng-click="removeHeaderPattern(pattern)"><span class="glyphicon glyphicon-trash"></span></a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                </li>
+                <li>
+                  <div class="row">
+                  <div class="col-md-12">
+                  <h4>Body Patterns</h4>
+                    <div ng-show="hasBodyPatterns()">
+                      <div class="row">
+                        <label class="form-label col-md-2">Name</label>
+                        <label class="form-label col-md-1 text-center">Source</label>
+                        <label class="form-label col-md-4">Regex</label>
+                        <label class="form-label col-md-2">Type</label>
+                        <label class="form-label col-md-3">Dest</label>
+                      </div>
+                      <div ng-repeat="patternset in config.bodyPatterns">
+                        <div ng-repeat="pattern in patternset" class="row">
+                          <div class="col-md-2">{{ pattern.name }}</div>
+                          <div class="col-md-1 text-center">{{ pattern.sourceCol }}</div>
+                          <div class="col-md-4">{{ pattern.regex }}</div>
+                          <div class="col-md-2">{{ pattern.type }}</div>
+                          <div class="col-md-2">{{ pattern.destCol }}</div>
+                          <div class="col-md-1">
+                            <a href="#" ng-click="removeBodyPattern(pattern)"><span class="glyphicon glyphicon-trash"></span></a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                </li>
+              </ul>
+
+            </div>
+          </div><!-- End Panel -->
+
+        </div><!-- End Configuration Details -->
+
+        <!-- Configuration Files -->
+        <div class="col-md-4">
+
+          <div class="panel panel-default">
+            <div class="panel-body">
+
+              <!-- Data File -->
+              <div class="row">
+                <form>
+                  <div class="form-group">
+                    <label class="form-label col-md-2">File:</label>
+                    <div class="col-md-8">
+                      {{ activeFilename }}
+                    </div>
+                    <div class="col-md-1">
+                      <a href="#" data-toggle="modal" data-target="#loadModal"><span class="glyphicon glyphicon-folder-open"></span></a>
+                    </div>
+                  </div>
+                </form>
+              </div><!-- End Data File -->
+
+              <!-- Config File -->
+              <div class="row">
+                <form>
+                  <div class="form-group">
+                    <label class="form-label col-md-2">Config:</label>
+                    <div class="col-md-8">
+                      <input type="text" class="form-control" ng-model="configFileName">
+                    </div>
+                    <div class="col-md-1">
+                      <a href="#" data-toggle="modal" data-target="#loadConfigModal"><span class="glyphicon glyphicon-folder-open"></span></a>
+                    </div>
+                    <div class="col-md-1">
+                      <a href="#" ng-click="saveConfig()"><span class="glyphicon glyphicon-floppy-disk"></span></a>
+                    </div>
+                  </div>
+                </form>
+              </div><!-- End Config File -->
+
+            </div>
+          </div>
+
+        </div><!-- End Configuration Files -->
+
+      </div><!-- End Top Section -->
+
+        <!-- All content row -->
+        <div class="row">
+
+          <!-- View Section -->
+          <div class="col-md-12">
+
+            <!-- Nav tabs -->
+            <ul class="nav nav-pills" role="tablist">
+              <li class="active"><a href="#raw" role="tab" data-toggle="tab">Raw</a></li>
+              <li><a href="#header" role="tab" data-toggle="tab">Header</a></li>
+              <li><a href="#body" role="tab" data-toggle="tab">Body</a></li>
+              <li><a href="#results" role="tab" data-toggle="tab">Final</a></li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+
+              <!-- Raw Tab Pane -->
+              <div class="tab-pane active" id="raw">
+
+                <hr>
+
+              </div><!-- End Raw Tab Pane -->
+
+              <!-- Header Tab Pane -->
+              <div class="tab-pane" id="header">
+
+                <hr>
+
+                <div class="row">
+                  <div class="form-group col-md-4">
+                    <label>Header Column</label>
+                    <select class="form-control" ng-model="config.headerMatchCol">
+                      <option ng-repeat="col in rawdata[0] track by $index">{{ $index }}</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-md-4">
+                    <label>Matches Expression</label>
+                    <input type="text" class="form-control" ng-model="config.headerMatchValue"/>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label>Active Column</label>
+                      <div class="input-group">
+                        <select class="form-control" ng-model="pattern.sourceCol">
+                          <option value="{{ $index }}" ng-repeat="col in rawdata[0] track by $index">{{ $index }}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="form-group col-md-3">
+                    <label>Name</label>
+                    <input type="text" class="form-control" ng-model="pattern.name">
+                  </div>
+                  <div class="form-group col-md-4">
+                    <label>Regex <a href="#" data-toggle="modal" data-target="#libraryModal"><span class="glyphicon glyphicon-book"></span></a></label>
+                    <input type="text" class="form-control" ng-model="pattern.regex">
+                  </div>
+                  <div class="form-group col-md-2">
+                    <label>Type</label>
+                    <select class="form-control" ng-model="pattern.type">
+                      <option>Required</option>
+                      <option>Remove</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-md-3">
+                    <label>Destination Columns</label>
+                    <select class="form-control" ng-model="pattern.destCol">
+                      <option ng-repeat="col in config.headerAddCols">{{ col }}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="form-group">
+                    <div class="col-md-1">
+                      <button class="btn btn-info" ng-click="preProcessOne(pattern)">Test</button>
+                    </div>
+                    <div class="col-md-1">
+                      <button class="btn btn-default" ng-click="addHeaderPattern(pattern)">Add</button>
+                    </div>
+                    <div class="col-md-3 col-md-offset-7">
+                      <button class="btn btn-success btn-block" ng-click="preProcessAll()">Test All</button>
+                    </div>
+                  </div>
+                </div>
+
+                <hr>
+
+                <div class="row" ng-show="preprocessed.length">
+                  <div class="col-md-12 big-data">
+                    <table class="table table-striped table-bordered table-condensed" id="example">
+                      <tr ng-repeat="row in preprocessed track by $index">
+                        <td ng-repeat="cell in row track by $index">{{ cell }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+
+              </div><!-- End Header Tab Pane -->
+
+              <!-- Body Tab Pane -->
+              <div class="tab-pane" id="body">
+
+                <hr>
+
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label>Active Column</label>
+                      <div class="input-group">
+                        <select class="form-control" ng-model="activeHeader">
+                          <option value="{{ $index }}" ng-repeat="hdr in preprocessed[0] track by $index">{{ hdr }}</option>
+                        </select>
+                        <div class="input-group-addon btn btn-default" ng-click="refresh()">Refresh</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="form-group col-md-3">
+                    <label>Name</label>
+                    <input type="text" class="form-control" ng-model="pattern.name">
+                  </div>
+                  <div class="form-group col-md-4">
+                    <label>Regex</label>
+                    <input type="text" class="form-control" ng-model="pattern.regex">
+                  </div>
+                  <div class="form-group col-md-2">
+                    <label>Type</label>
+                    <select class="form-control" ng-model="pattern.type">
+                      <option>Required</option>
+                      <option>Remove</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-md-3">
+                    <label>Destination Column</label>
+                    <select class="form-control" ng-model="pattern.destCol">
+                      <option ng-repeat="col in config.bodyAddCols">{{ col }}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="form-group">
+                    <div class="col-md-1">
+                      <button class="btn btn-info" ng-click="testOnePattern(pattern)">Test</button>
+                    </div>
+                    <div class="col-md-1">
+                      <button class="btn btn-default" ng-click="addBodyPattern(pattern)">Add</button>
+                    </div>
+                    <div class="col-md-3 col-md-offset-7">
+                      <button class="btn btn-success btn-block" ng-click="testAll()">Test All</button>
+                    </div>
+                  </div>
+                </div>
+
+                <hr>
+
+                <div class="row" ng-show="activeCol.length > 0">
+                  <div class="col-md-12 big-data">
+
+                    <table class="table table-striped table-bordered table-condensed">
+                      <thead><tr><th>Source Data</th></tr></thead>
+                      <tbody>
+                        <tr ng-repeat="row in activeCol track by $index">
+                          <td>{{ row }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <table class="table table-striped table-bordered table-condensed">
+                      <thead><tr><th>Unique Values</th></tr></thead>
+                      <tbody>
+                        <tr ng-repeat="row in activeColUnique track by $index">
+                          <td>{{ row }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div ng-repeat="test in tests">
+                      <table class="table table-striped table-bordered table-condensed">
+                        <thead><tr><th>Pattern: {{ test.pattern.name }}</th></tr></thead>
+                        <tbody>
+                          <tr ng-repeat="row in test.results track by $index">
+                          <td>{{ row }}</td>
+                            <!-- <td ng-repeat="cell in row track by $index">{{ cell }}</td> -->
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div><!-- End Body Tab Pane -->
+
+              <!-- Results Tab Pane -->
+              <div class="tab-pane" id="results">
+
+                <hr>
+
+                <div class="row">
+                  <div class="col-md-4 col-md-offset-4">
+                    <button class="btn btn-success btn-lg btn-block" ng-click="generate()">Refresh</button>
+                  </div>
+                  <div class="col-md-2">
+                    <button class="btn btn-primary btn-lg btn-block" ng-click="saveResults()">Save</button>
+                  </div>
+                  <div class="col-md-2" ng-show="resultsLink">
+                    <a href="{{ resultsLink }}" class="btn btn-default btn-lg btn-block" >Download</a>
+                  </div>
+                </div>
+
+                <br/>
+
+                <div class="row">
+                  <div class="col-md-12">
+                    <table class="table table-striped table-bordered table-condensed big-data">
+                      <tr ng-repeat="row in results track by $index">
+                        <td ng-repeat="cell in row track by $index">{{ cell }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+
+                <hr>
+
+              </div><!-- End Results Tab Pane -->
+
+            </div><!-- End Tab Content -->
+
+          </div><!-- End View Section -->
+
+        </div><!-- End content row -->
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            <h4 class="modal-title">Upload File</h4>
+          </div>
+          <form role="form" action="/upload" method="post" enctype="multipart/form-data">
+            <div class="modal-body">
+              <div class="form-group">
+                <input type="file" name="file" ng-model="filename" />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+              <input type="submit" class="btn btn-primary" value="Upload"/>
+            </div>
+          </form>
+        </div><!-- /.modal-content -->
+      </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+
+  </body>
+
+</html>
